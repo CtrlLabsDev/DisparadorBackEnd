@@ -1,0 +1,18 @@
+# Ambientes virtuais
+myenv/
+venv/
+
+# Arquivos Python
+*.pyc
+__pycache__/
+
+# Banco de Dados
+db.sqlite3
+
+# Configurações do Django
+*.env
+
+# Arquivos do sistema
+.DS_Store
+.idea/
+.vscode/
