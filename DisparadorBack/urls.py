@@ -3,5 +3,5 @@ from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('DisparadorApp.urls')),  # Nome correto do aplicativo
+    path('api/', include('DisparadorApp.urls')),  # 👈 adiciona aqui
 ]
