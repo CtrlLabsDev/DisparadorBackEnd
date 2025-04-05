@@ -11,6 +11,8 @@ from django.http import HttpResponse
 from rest_framework.decorators import parser_classes
 from rest_framework.parsers import MultiPartParser
 from io import TextIOWrapper
+from .tasks import disparar_mensagens
+
 
 class CampanhaViewSet(viewsets.ModelViewSet):
     queryset = Campanha.objects.all().order_by('-data_criacao')
@@ -105,3 +107,9 @@ def importar_csv_dados(request):
         count += 1
 
     return Response({"mensagem": f"{count} registros importados com sucesso."})
+
+
+@api_view(["POST"])
+def testar_disparo(request):
+    disparar_mensagens()
+    return Response({"mensagem": "Mensagens simuladas com sucesso!"})
