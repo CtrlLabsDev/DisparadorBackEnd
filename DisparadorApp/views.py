@@ -12,6 +12,8 @@ from rest_framework.decorators import parser_classes
 from rest_framework.parsers import MultiPartParser
 from io import TextIOWrapper
 from .tasks import disparar_mensagens
+from datetime import datetime
+from rest_framework import status
 
 
 class CampanhaViewSet(viewsets.ModelViewSet):
@@ -113,3 +115,47 @@ def importar_csv_dados(request):
 def testar_disparo(request):
     disparar_mensagens()
     return Response({"mensagem": "Mensagens simuladas com sucesso!"})
+
+
+
+@api_view(['GET'])
+def buscar_mensagens_disparo(request):
+    agora = datetime.now()
+    campanhas = Campanha.objects.filter(
+        status="agendada",
+        data_inicio__lte=agora.date(),
+        hora_inicio__lte=agora.time(),
+        hora_termino__gte=agora.time()
+    )
+
+    mensagens = []
+
+    for campanha in campanhas:
+        dados = Dados.objects.filter(enviado=False, campanha=campanha)
+        for dado in dados:
+            mensagem_formatada = campanha.mensagem.format(
+                variavel_a=dado.variavel_a or "",
+                variavel_b=dado.variavel_b or "",
+                variavel_c=dado.variavel_c or "",
+                variavel_d=dado.variavel_d or "",
+            )
+
+            mensagens.append({
+                "id": dado.id,
+                "telefone": dado.telefone,
+                "mensagem": mensagem_formatada
+            })
+
+    return Response(mensagens)
+
+
+@api_view(['PATCH'])
+def atualizar_status_envio(request, pk):
+    try:
+        dado = Dados.objects.get(pk=pk)
+        dado.enviado = True
+        dado.data_envio = datetime.now()
+        dado.save()
+        return Response({"mensagem": "Status atualizado com sucesso!"})
+    except Dados.DoesNotExist:
+        return Response({"erro": "Dado não encontrado."}, status=status.HTTP_404_NOT_FOUND)
