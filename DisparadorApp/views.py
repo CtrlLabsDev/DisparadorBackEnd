@@ -16,7 +16,7 @@ from io import TextIOWrapper
 from .tasks import disparar_mensagens
 from datetime import datetime
 from rest_framework import status
-
+from django.shortcuts import get_object_or_404
 
 #Variavel
 disparo_em_execucao = False
@@ -25,6 +25,12 @@ processo_disparo = None
 class CampanhaViewSet(viewsets.ModelViewSet):
     queryset = Campanha.objects.all().order_by('-data_criacao')
     serializer_class = CampanhaSerializer
+
+    def update(self, request, *args, **kwargs):
+        # Sempre que editar, altera o status para agendada
+        request.data['status'] = 'agendada'
+        return super().update(request, *args, **kwargs)
+
 
 
 class MensagemViewSet(viewsets.ModelViewSet):
@@ -128,7 +134,7 @@ def testar_disparo(request):
 def buscar_mensagens_disparo(request):
     agora = datetime.now()
     campanhas = Campanha.objects.filter(
-        status="agendada",
+        # status="emexecucao",
         data_inicio__lte=agora.date(),
         hora_inicio__lte=agora.time(),
         hora_termino__gte=agora.time()
@@ -185,11 +191,20 @@ def configuracao_envio(request):
 
 
 
-def monitorar_processo(p):
+def monitorar_processo(p, campanha_id):
     global disparo_em_execucao
     p.wait()  # Espera o processo terminar
     disparo_em_execucao = False
+
+    try:
+        campanha = Campanha.objects.get(id=campanha_id)
+        campanha.status = 'finalizada'
+        campanha.save()
+    except Campanha.DoesNotExist:
+        print("⚠️ Campanha não encontrada para finalizar.")
+
     print("🟢 Processo finalizado. Flag liberada.")
+
 
 
 
@@ -200,6 +215,10 @@ def iniciar_disparo(request):
     if disparo_em_execucao:
         return Response({'mensagem': 'Já existe um processo em execução.'}, status=409)
 
+    campanha_id = request.data.get('campanha_id')
+    if not campanha_id:
+        return Response({'erro': 'ID da campanha não enviado'}, status=400)
+
     try:
         processo_disparo = subprocess.Popen(
             ['node', 'index.js'],
@@ -207,8 +226,14 @@ def iniciar_disparo(request):
         )
         disparo_em_execucao = True
 
+
+        # Atualiza status para "emexecucao"
+        campanha = get_object_or_404(Campanha, id=campanha_id)
+        campanha.status = 'emexecucao'
+        campanha.save()
+
         # Inicia monitoramento em background
-        threading.Thread(target=monitorar_processo, args=(processo_disparo,)).start()
+        threading.Thread(target=monitorar_processo, args=(processo_disparo, campanha_id)).start()
 
         return Response({'mensagem': 'Processo de disparo iniciado com sucesso.'})
     except Exception as e:
