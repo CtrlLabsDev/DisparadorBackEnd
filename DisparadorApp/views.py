@@ -1,12 +1,14 @@
 import openpyxl
 import csv
 import io
+import subprocess
+import threading
 
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework import viewsets
 from .models import Campanha, Mensagem, Configuracao, Dados
-from .serializers import CampanhaSerializer, MensagemSerializer, ConfiguracaoSerializer, DadosSerializer
+from .serializers import CampanhaSerializer, MensagemSerializer, ConfiguracaoSerializer, DadosSerializer, ConfiguracaoSerializer
 from django.http import HttpResponse
 from rest_framework.decorators import parser_classes
 from rest_framework.parsers import MultiPartParser
@@ -15,6 +17,10 @@ from .tasks import disparar_mensagens
 from datetime import datetime
 from rest_framework import status
 
+
+#Variavel
+disparo_em_execucao = False
+processo_disparo = None
 
 class CampanhaViewSet(viewsets.ModelViewSet):
     queryset = Campanha.objects.all().order_by('-data_criacao')
@@ -143,10 +149,15 @@ def buscar_mensagens_disparo(request):
             mensagens.append({
                 "id": dado.id,
                 "telefone": dado.telefone,
-                "mensagem": mensagem_formatada
+                "mensagem": mensagem_formatada,
+                "campanha_id": campanha.id,
+                "hora_inicio": str(campanha.hora_inicio),
+                "hora_termino": str(campanha.hora_termino)
             })
 
     return Response(mensagens)
+
+
 
 
 @api_view(['PATCH'])
@@ -159,3 +170,47 @@ def atualizar_status_envio(request, pk):
         return Response({"mensagem": "Status atualizado com sucesso!"})
     except Dados.DoesNotExist:
         return Response({"erro": "Dado não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+    
+
+
+@api_view(['GET'])
+def configuracao_envio(request):
+    config = Configuracao.objects.first()
+    if config:
+        return Response({
+            'min': config.periodo_envio_min,
+            'max': config.periodo_envio_max
+        })
+    return Response({'erro': 'Nenhuma configuração encontrada.'}, status=404)
+
+
+
+def monitorar_processo(p):
+    global disparo_em_execucao
+    p.wait()  # Espera o processo terminar
+    disparo_em_execucao = False
+    print("🟢 Processo finalizado. Flag liberada.")
+
+
+
+@api_view(['POST'])
+def iniciar_disparo(request):
+    global disparo_em_execucao, processo_disparo
+
+    if disparo_em_execucao:
+        return Response({'mensagem': 'Já existe um processo em execução.'}, status=409)
+
+    try:
+        processo_disparo = subprocess.Popen(
+            ['node', 'index.js'],
+            cwd='C:/projetos/Disparador-Wpp/DisparadorBot'
+        )
+        disparo_em_execucao = True
+
+        # Inicia monitoramento em background
+        threading.Thread(target=monitorar_processo, args=(processo_disparo,)).start()
+
+        return Response({'mensagem': 'Processo de disparo iniciado com sucesso.'})
+    except Exception as e:
+        disparo_em_execucao = False
+        return Response({'erro': str(e)}, status=500)
