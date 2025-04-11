@@ -55,6 +55,7 @@ class Dados(models.Model):
     enviado = models.BooleanField(default=False)
     data_envio = models.DateTimeField(blank=True, null=True)
     campanha = models.ForeignKey("Campanha", on_delete=models.CASCADE, related_name="dados")
+    erro_envio = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.telefone

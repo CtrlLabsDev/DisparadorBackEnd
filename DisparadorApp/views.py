@@ -17,6 +17,8 @@ from .tasks import disparar_mensagens
 from datetime import datetime
 from rest_framework import status
 from django.shortcuts import get_object_or_404
+from django.db.models.functions import TruncDate
+from django.db.models import Count
 
 #Variavel
 disparo_em_execucao = False
@@ -173,11 +175,16 @@ def atualizar_status_envio(request, pk):
         dado = Dados.objects.get(pk=pk)
         dado.enviado = True
         dado.data_envio = datetime.now()
+
+        # Se foi enviado um campo "erro_envio" = True no body
+        if request.data.get("erro_envio"):
+            dado.erro_envio = True
+
         dado.save()
         return Response({"mensagem": "Status atualizado com sucesso!"})
     except Dados.DoesNotExist:
         return Response({"erro": "Dado não encontrado."}, status=status.HTTP_404_NOT_FOUND)
-    
+
 
 
 @api_view(['GET'])
@@ -240,3 +247,50 @@ def iniciar_disparo(request):
     except Exception as e:
         disparo_em_execucao = False
         return Response({'erro': str(e)}, status=500)
+
+
+
+
+@api_view(['GET'])
+def dashboard_kpis(request):
+    total = Dados.objects.count()
+    enviadas = Dados.objects.filter(enviado=True).count()
+    aguardando = Dados.objects.filter(enviado=False).count()
+    com_erro = Dados.objects.filter(enviado=True, erro_envio=True).count()
+
+    return Response({
+        "total": total,
+        "enviadas": enviadas,
+        "aguardando": aguardando,
+        "com_erro": com_erro
+    })
+
+
+@api_view(['GET'])
+def grafico_mensagens_por_dia(request):
+    dados = Dados.objects.filter(enviado=True).annotate(
+        data=TruncDate("data_envio")
+    ).values("data").annotate(
+        total=Count("id")
+    ).order_by("data")
+
+    labels = [d["data"].strftime("%d/%m/%Y") for d in dados]
+    valores = [d["total"] for d in dados]
+
+    return Response({
+        "labels": labels,
+        "valores": valores
+    })
+
+
+
+@api_view(['PATCH'])
+def registrar_erro_envio(request, pk):
+    try:
+        dado = Dados.objects.get(pk=pk)
+        erro = request.data.get('erro', '')
+        dado.erro_envio = erro
+        dado.save()
+        return Response({"mensagem": "Erro registrado com sucesso!"})
+    except Dados.DoesNotExist:
+        return Response({"erro": "Dado não encontrado."}, status=status.HTTP_404_NOT_FOUND)
