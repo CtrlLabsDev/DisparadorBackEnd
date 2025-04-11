@@ -132,36 +132,37 @@ def testar_disparo(request):
 
 @api_view(['GET'])
 def buscar_mensagens_disparo(request):
-    agora = datetime.now()
-    campanhas = Campanha.objects.filter(
-        # status="emexecucao",
-        data_inicio__lte=agora.date(),
-        hora_inicio__lte=agora.time(),
-        hora_termino__gte=agora.time()
-    )
+    campanha_id = request.query_params.get("campanha_id")  # 👈 captura da URL
+    if not campanha_id:
+        return Response({"erro": "ID da campanha não informado."}, status=400)
+
+    try:
+        campanha = Campanha.objects.get(id=campanha_id)
+    except Campanha.DoesNotExist:
+        return Response({"erro": "Campanha não encontrada."}, status=404)
+
+    dados = Dados.objects.filter(enviado=False, campanha_id=campanha_id)
 
     mensagens = []
+    for dado in dados:
+        mensagem_formatada = campanha.mensagem.format(
+            variavel_a=dado.variavel_a or "",
+            variavel_b=dado.variavel_b or "",
+            variavel_c=dado.variavel_c or "",
+            variavel_d=dado.variavel_d or "",
+        )
 
-    for campanha in campanhas:
-        dados = Dados.objects.filter(enviado=False, campanha=campanha)
-        for dado in dados:
-            mensagem_formatada = campanha.mensagem.format(
-                variavel_a=dado.variavel_a or "",
-                variavel_b=dado.variavel_b or "",
-                variavel_c=dado.variavel_c or "",
-                variavel_d=dado.variavel_d or "",
-            )
-
-            mensagens.append({
-                "id": dado.id,
-                "telefone": dado.telefone,
-                "mensagem": mensagem_formatada,
-                "campanha_id": campanha.id,
-                "hora_inicio": str(campanha.hora_inicio),
-                "hora_termino": str(campanha.hora_termino)
-            })
+        mensagens.append({
+            "id": dado.id,
+            "telefone": dado.telefone,
+            "mensagem": mensagem_formatada,
+            "campanha_id": campanha.id,
+            "hora_inicio": str(campanha.hora_inicio),
+            "hora_termino": str(campanha.hora_termino)
+        })
 
     return Response(mensagens)
+
 
 
 
@@ -221,7 +222,7 @@ def iniciar_disparo(request):
 
     try:
         processo_disparo = subprocess.Popen(
-            ['node', 'index.js'],
+            ['node', 'index.js', str(campanha_id)],
             cwd='C:/projetos/Disparador-Wpp/DisparadorBot'
         )
         disparo_em_execucao = True
