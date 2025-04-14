@@ -220,6 +220,8 @@ def monitorar_processo(p, campanha_id):
 def iniciar_disparo(request):
     global disparo_em_execucao, processo_disparo
 
+    
+
     if disparo_em_execucao:
         return Response({'mensagem': 'Já existe um processo em execução.'}, status=409)
 
@@ -228,9 +230,13 @@ def iniciar_disparo(request):
         return Response({'erro': 'ID da campanha não enviado'}, status=400)
 
     try:
+
+        print("📨 Requisição recebida:", request.data)
+        print("📌 Tentando iniciar campanha ID:", campanha_id)
+
         processo_disparo = subprocess.Popen(
             ['node', 'index.js', str(campanha_id)],
-            cwd='/home/alphabeto/CTRLabs/DisparadorBOT'
+            cwd='C:\projetos\Disparador-Wpp\DisparadorBot'
         )
         disparo_em_execucao = True
 
@@ -246,6 +252,7 @@ def iniciar_disparo(request):
         return Response({'mensagem': 'Processo de disparo iniciado com sucesso.'})
     except Exception as e:
         disparo_em_execucao = False
+        print("❌ Erro ao iniciar disparo:", str(e))  # 👈 ESSENCIAL PRA VER O ERRO
         return Response({'erro': str(e)}, status=500)
 
 
