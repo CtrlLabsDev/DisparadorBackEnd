@@ -101,12 +101,12 @@ def importar_csv_dados(request):
     if not arquivo or not campanha_id:
         return Response({"erro": "Arquivo ou ID da campanha não enviado."}, status=400)
 
-    decoded_file = TextIOWrapper(arquivo.file, encoding="utf-8")
-    reader = csv.DictReader(decoded_file, delimiter=';')
+    decoded_file = TextIOWrapper(arquivo.file, encoding="utf-8", newline='')  # 👈 previne quebra errada de linha
+    reader = csv.DictReader(decoded_file, delimiter=';', quotechar='"', skipinitialspace=True)  # 👈 trata espaços e campos compostos  
 
     count = 0
     for row in reader:
-        telefone = row.get("telefone")
+        telefone = row.get("telefone") or row.get("\ufefftelefone")
         if not telefone:
             print("Linha ignorada: telefone ausente", row)
             continue
