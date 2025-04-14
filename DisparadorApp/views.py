@@ -230,7 +230,7 @@ def iniciar_disparo(request):
     try:
         processo_disparo = subprocess.Popen(
             ['node', 'index.js', str(campanha_id)],
-            cwd='C:/projetos/Disparador-Wpp/DisparadorBot'
+            cwd='/home/alphabeto/CTRLabs/DisparadorBOT'
         )
         disparo_em_execucao = True
 
