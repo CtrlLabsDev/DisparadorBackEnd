@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import CampanhaViewSet, MensagemViewSet, ConfiguracaoViewSet, DadosViewSet
 from .views import download_modelo_excel, importar_csv_dados, testar_disparo, buscar_mensagens_disparo, atualizar_status_envio, unica_configuracao, iniciar_disparo
 from . import views
-from .views import dashboard_kpis
+from .views import dashboard_kpis, parar_disparo, registrar_erro_envio
 
 
 router = DefaultRouter()
@@ -23,6 +23,7 @@ urlpatterns = [
     path('dashboard-kpis/', views.dashboard_kpis),
     path('api/mensagens-por-dia/', views.grafico_mensagens_por_dia),
     path('api/registrar-erro-envio/<int:pk>/', views.registrar_erro_envio),
+    path('api/parar-disparo/', views.parar_disparo),
 
 ]
 

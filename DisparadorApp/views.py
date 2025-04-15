@@ -201,17 +201,21 @@ def configuracao_envio(request):
 
 def monitorar_processo(p, campanha_id):
     global disparo_em_execucao
-    p.wait()  # Espera o processo terminar
+    p.wait()
     disparo_em_execucao = False
 
     try:
         campanha = Campanha.objects.get(id=campanha_id)
-        campanha.status = 'finalizada'
-        campanha.save()
+        
+        # Só marca como finalizada se ainda estiver em execução
+        if campanha.status == 'emexecucao':
+            campanha.status = 'finalizada'
+            campanha.save()
     except Campanha.DoesNotExist:
         print("⚠️ Campanha não encontrada para finalizar.")
 
     print("🟢 Processo finalizado. Flag liberada.")
+
 
 
 
@@ -234,6 +238,14 @@ def iniciar_disparo(request):
         print("📨 Requisição recebida:", request.data)
         print("📌 Tentando iniciar campanha ID:", campanha_id)
 
+         # Busca a campanha
+        campanha = get_object_or_404(Campanha, id=campanha_id)
+
+         # Valida status permitido
+        if campanha.status not in ['agendada', 'pausada']:
+            return Response({'erro': 'Campanha não pode ser iniciada. Status atual: ' + campanha.status}, status=400)
+
+         # Inicia subprocesso
         processo_disparo = subprocess.Popen(
             ['node', 'index.js', str(campanha_id)],
             cwd='C:\projetos\Disparador-Wpp\DisparadorBot'
@@ -301,3 +313,28 @@ def registrar_erro_envio(request, pk):
         return Response({"mensagem": "Erro registrado com sucesso!"})
     except Dados.DoesNotExist:
         return Response({"erro": "Dado não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+
+
+
+@api_view(['POST'])
+def parar_disparo(request):
+    global processo_disparo, disparo_em_execucao
+
+    if not disparo_em_execucao or processo_disparo is None:
+        return Response({'mensagem': 'Nenhum processo em execução.'}, status=400)
+
+    try:
+        processo_disparo.terminate()
+        processo_disparo = None
+        disparo_em_execucao = False
+
+        campanha_id = request.data.get("campanha_id")
+        if campanha_id:
+            campanha = get_object_or_404(Campanha, id=campanha_id)
+            campanha.status = 'pausada'  # ou 'interrompida', se quiser criar esse novo status
+            campanha.save()
+
+        return Response({'mensagem': 'Campanha pausada com sucesso.'})
+    except Exception as e:
+        return Response({'erro': str(e)}, status=500)

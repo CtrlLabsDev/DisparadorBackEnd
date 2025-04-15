@@ -6,6 +6,7 @@ from datetime import time
 class Campanha(models.Model):
     STATUS_CHOICES = [
         ('agendada', 'Agendada'),
+        ('pausada', 'Pausada'),
         ('emexecucao', 'Em Execução'),
         ('finalizada', 'Finalizada'),
     ]
