@@ -20,6 +20,13 @@ from django.shortcuts import get_object_or_404
 from django.db.models.functions import TruncDate
 from django.db.models import Count
 
+import subprocess
+import logging
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from .models import Campanha
+
 #Variavel
 disparo_em_execucao = False
 processo_disparo = None
@@ -206,16 +213,18 @@ def monitorar_processo(p, campanha_id):
 
     try:
         campanha = Campanha.objects.get(id=campanha_id)
-        
-        # Só marca como finalizada se ainda estiver em execução
+
+        # Só finaliza se o status ainda for em execução
         if campanha.status == 'emexecucao':
             campanha.status = 'finalizada'
             campanha.save()
+            print(f"✅ Campanha ID {campanha_id} finalizada automaticamente.")
+        else:
+            print(f"⚠️ Campanha ID {campanha_id} não finalizada. Status atual: {campanha.status}")
     except Campanha.DoesNotExist:
         print("⚠️ Campanha não encontrada para finalizar.")
 
     print("🟢 Processo finalizado. Flag liberada.")
-
 
 
 
@@ -248,7 +257,7 @@ def iniciar_disparo(request):
          # Inicia subprocesso
         processo_disparo = subprocess.Popen(
             ['node', 'index.js', str(campanha_id)],
-            cwd='C:\projetos\Disparador-Wpp\DisparadorBot'
+            cwd='/home/alphabeto/CtrLabs/DisparadorBOT'
         )
         disparo_em_execucao = True
 
@@ -317,24 +326,47 @@ def registrar_erro_envio(request, pk):
 
 
 
+# Usa o logger da app (ajuste o nome se quiser, ex: 'django', 'disparo' etc.)
+logger = logging.getLogger(__name__)
+
 @api_view(['POST'])
 def parar_disparo(request):
-    global processo_disparo, disparo_em_execucao
-
-    if not disparo_em_execucao or processo_disparo is None:
-        return Response({'mensagem': 'Nenhum processo em execução.'}, status=400)
+    campanha_id = request.data.get("campanha_id")
+    logger.info("========== POST /parar-disparo ==========")
+    logger.info(f"campanha_id recebida: {campanha_id}")
 
     try:
-        processo_disparo.terminate()
-        processo_disparo = None
-        disparo_em_execucao = False
+        # Tenta matar o processo 'node index.js'
+        logger.info("Executando: pkill -f 'node index.js'")
+        subprocess.run(['pkill', '-f', 'node index.js'], check=False)
 
-        campanha_id = request.data.get("campanha_id")
+        # Verifica se ainda há algum processo ativo
+        logger.info("Executando verificação: ps aux | grep '[n]ode index.js'")
+        result = subprocess.run(
+            "ps aux | grep '[n]ode index.js'",
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        output = result.stdout.strip()
+        if output:
+            logger.warning("Processo ainda ativo após pkill:")
+            logger.warning(output)
+            return Response({'mensagem': 'Erro: processo ainda em execução.'}, status=500)
+
+        # Atualiza status da campanha no banco de dados
         if campanha_id:
             campanha = get_object_or_404(Campanha, id=campanha_id)
-            campanha.status = 'pausada'  # ou 'interrompida', se quiser criar esse novo status
+            campanha.status = 'pausada'
             campanha.save()
+            logger.info(f"Campanha ID {campanha_id} atualizada para status 'pausada'.")
 
-        return Response({'mensagem': 'Campanha pausada com sucesso.'})
+        logger.info("Campanha pausada com sucesso.")
+        logger.info("========== Fim /parar-disparo ==========\n")
+        return Response({'mensagem': 'Campanha pausada com sucesso.'}, status=200)
+
     except Exception as e:
-        return Response({'erro': str(e)}, status=500)
+        logger.exception("Erro ao tentar pausar a campanha:")
+        return Response({'erro': str(e)}, status=500)   
